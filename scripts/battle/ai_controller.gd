@@ -1,7 +1,7 @@
 class_name AIController extends RefCounted
 
-func decide_action(state: BattleState, unit) -> BattleAction:
-	var range_dist: int = unit.unit_data.base_range
+func decide_action(state: BattleState, unit: Node2D) -> BattleAction:
+	var range_dist: int = unit.current_range if "current_range" in unit else unit.unit_data.base_range
 	var in_range := get_enemies_in_range(state, unit, range_dist)
 	if in_range.size() > 0:
 		var target = in_range[0]
@@ -32,8 +32,8 @@ func decide_action(state: BattleState, unit) -> BattleAction:
 	action.action_type = BattleAction.ActionType.WAIT
 	return action
 
-func get_enemies_in_range(state: BattleState, unit, range_dist: int) -> Array:
-	var enemies: Array = []
+func get_enemies_in_range(state: BattleState, unit: Node2D, range_dist: int) -> Array[Node2D]:
+	var enemies: Array[Node2D] = []
 	for u in state.units:
 		if not u.is_alive() or u.team == unit.team:
 			continue
@@ -42,7 +42,7 @@ func get_enemies_in_range(state: BattleState, unit, range_dist: int) -> Array:
 			enemies.append(u)
 	return enemies
 
-func find_nearest_enemy(state: BattleState, unit):
+func find_nearest_enemy(state: BattleState, unit: Node2D):
 	var nearest = null
 	var min_dist: int = 999
 	for u in state.units:
@@ -83,7 +83,7 @@ func get_next_tile_toward(from: Vector2i, to: Vector2i, state: BattleState, grid
 
 	return null
 
-func _count_splash_targets(state: BattleState, attacker, target) -> int:
+func _count_splash_targets(state: BattleState, attacker: Node2D, target: Node2D) -> int:
 	var count: int = 0
 	var tx: int = target.grid_pos.x
 	var ty: int = target.grid_pos.y
@@ -94,6 +94,14 @@ func _count_splash_targets(state: BattleState, attacker, target) -> int:
 				if CombatEngine.is_tile_valid(p, state.grid_w, state.grid_h) and state.tile_units.has(p):
 					if state.tile_units[p].team != attacker.team:
 						count += 1
+		Enums.AOEType.LINE:
+			var dir: int = -1 if attacker.team == 0 else 1
+			var y: int = ty + dir
+			while y >= 0 and y < state.grid_h:
+				var p: Vector2i = Vector2i(tx, y)
+				if state.tile_units.has(p) and state.tile_units[p].team != attacker.team:
+					count += 1
+				y += dir
 		Enums.AOEType.SPLASH_ORTHO:
 			for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
 				var p: Vector2i = target.grid_pos + d

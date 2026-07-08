@@ -1,10 +1,8 @@
 extends RefCounted
 
-const MapNodeData = preload("res://scripts/map/map_node_data.gd")
-
-static func generate(act: int) -> Array:
+static func generate(act: int) -> Array[MapNodeData]:
 	var layers := _get_layer_count(act)
-	var all_nodes: Array = []
+	var all_nodes: Array[MapNodeData] = []
 
 	for l in range(layers):
 		var count := _rng(l, 2, 4)
@@ -32,7 +30,7 @@ static func generate(act: int) -> Array:
 	for n in all_nodes:
 		if n.layer + 1 >= layers:
 			continue
-		var next_nodes: Array = []
+		var next_nodes: Array[MapNodeData] = []
 		for other in all_nodes:
 			if other.layer == n.layer + 1:
 				next_nodes.append(other)

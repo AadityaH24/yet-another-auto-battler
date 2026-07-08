@@ -1,12 +1,12 @@
 extends RefCounted
 
-const MapNodeData = preload("res://scripts/map/map_node_data.gd")
 const MapGenerator = preload("res://scripts/map/map_generator.gd")
 
 var act: int = 1
-var nodes: Array = []
-var current_node
+var nodes: Array[MapNodeData] = []
+var current_node: MapNodeData
 var player_roster: Array[UnitData] = []
+var item_inventory: Array[ItemData] = []
 var gold: int = 10
 
 func start_run(roster: Array[UnitData], starting_gold: int = 10):

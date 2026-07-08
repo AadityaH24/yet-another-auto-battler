@@ -1,10 +1,10 @@
-extends RefCounted
+class_name MapNodeData extends RefCounted
 
 enum Type { BATTLE, ELITE, BOSS, SHOP, TREASURE, REST }
 
 var node_type: int
 var node_name: String
-var connections: Array = []
+var connections: Array[MapNodeData] = []
 var layer: int
 var slot: int
 var completed: bool = false

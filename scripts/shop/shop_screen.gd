@@ -2,14 +2,24 @@ extends CanvasLayer
 
 signal closed(gold: int, roster: Array[UnitData])
 
+const SELL_AMOUNT: int = 1
+const MAX_ROSTER: int = 6
+
 var _gold: int
 var _roster: Array[UnitData]
 var _stock: Array[Dictionary] = []
 var _card_w: int = 140
 var _card_h: int = 110
+var _roster_card_w: int = 130
+var _roster_card_h: int = 80
 
 var _gold_label: Label
-var _container: Node2D
+var _roster_count_label: Label
+var _scroll: ScrollContainer
+var _body_container: VBoxContainer
+var _stock_container: HBoxContainer
+var _roster_container: HBoxContainer
+var _viewport_size: Vector2
 
 func _init():
 	layer = 2
@@ -23,19 +33,7 @@ func start(gold: int, roster: Array[UnitData]):
 	_build_ui()
 
 func _generate_stock() -> Array[Dictionary]:
-	var pool: Array[int] = [
-		Enums.UnitClass.SOLDIER,
-		Enums.UnitClass.MAGE,
-		Enums.UnitClass.SCOUT,
-		Enums.UnitClass.KNIGHT,
-		Enums.UnitClass.BERSERKER,
-		Enums.UnitClass.SHIELDBEARER,
-		Enums.UnitClass.LANCER,
-		Enums.UnitClass.ARCHER,
-		Enums.UnitClass.WARLOCK,
-		Enums.UnitClass.CLERIC,
-		Enums.UnitClass.ELEMENTALIST,
-	]
+	var pool: Array[int] = UnitFactory.ALL_CLASSES.duplicate()
 	pool.shuffle()
 	var result: Array[Dictionary] = []
 	for i in min(4, pool.size()):
@@ -46,201 +44,198 @@ func _make_shop_unit(cls: int) -> Dictionary:
 	var ud := _make_unit_by_class(cls)
 	return {"unit": ud, "price": ud.cost * 2 + 2}
 
-func _random_element() -> int:
-	if randi() % 10 < 7:
-		return Enums.ElementType.NONE
-	return [Enums.ElementType.FIRE, Enums.ElementType.WIND, Enums.ElementType.WATER, Enums.ElementType.EARTH].pick_random()
-
 func _make_unit_by_class(cls: int) -> UnitData:
-	var elem: int = _random_element()
-	match cls:
-		Enums.UnitClass.SOLDIER:
-			return _make_unit("Soldier", cls, Enums.UnitWeight.LIGHT, 3, 2, 2, elem, 2, 1, Enums.AOEType.SINGLE, Enums.AbilityType.NONE, "")
-		Enums.UnitClass.MAGE:
-			return _make_unit("Mage", cls, Enums.UnitWeight.LIGHT, 2, 2, 2, elem, 4, 2, Enums.AOEType.SPLASH_ORTHO, Enums.AbilityType.NONE, "")
-		Enums.UnitClass.SCOUT:
-			return _make_unit("Scout", cls, Enums.UnitWeight.LIGHT, 2, 1, 3, elem, 3, 1, Enums.AOEType.SINGLE, Enums.AbilityType.PASSIVE, "flanking")
-		Enums.UnitClass.KNIGHT:
-			return _make_unit("Knight", cls, Enums.UnitWeight.HEAVY, 5, 2, 1, elem, 3, 1, Enums.AOEType.SINGLE, Enums.AbilityType.PASSIVE, "guard")
-		Enums.UnitClass.ELEMENTALIST:
-			return _make_unit("Elementalist", cls, Enums.UnitWeight.HEAVY, 4, 3, 1, elem, 4, 2, Enums.AOEType.SPLASH_ORTHO, Enums.AbilityType.NONE, "")
-		Enums.UnitClass.BERSERKER:
-			return _make_unit("Berserker", cls, Enums.UnitWeight.HEAVY, 3, 3, 2, elem, 3, 1, Enums.AOEType.CLEAVE_SIDES, Enums.AbilityType.PASSIVE, "bloodrage")
-		Enums.UnitClass.SHIELDBEARER:
-			return _make_unit("Shieldbearer", cls, Enums.UnitWeight.HEAVY, 4, 1, 1, elem, 3, 1, Enums.AOEType.SINGLE, Enums.AbilityType.DEPLOYMENT, "shield_wall")
-		Enums.UnitClass.LANCER:
-			return _make_unit("Lancer", cls, Enums.UnitWeight.HEAVY, 3, 2, 2, elem, 3, 1, Enums.AOEType.LINE, Enums.AbilityType.DEPLOYMENT, "impale")
-		Enums.UnitClass.ARCHER:
-			return _make_unit("Archer", cls, Enums.UnitWeight.LIGHT, 2, 2, 2, elem, 3, 2, Enums.AOEType.SINGLE, Enums.AbilityType.PASSIVE, "focus")
-		Enums.UnitClass.WARLOCK:
-			return _make_unit("Warlock", cls, Enums.UnitWeight.LIGHT, 3, 2, 2, elem, 3, 2, Enums.AOEType.SINGLE, Enums.AbilityType.PASSIVE, "soul_leech")
-		Enums.UnitClass.CLERIC:
-			return _make_unit("Cleric", cls, Enums.UnitWeight.LIGHT, 3, 1, 2, elem, 3, 1, Enums.AOEType.SINGLE, Enums.AbilityType.PASSIVE, "heal_aura")
-	return _make_unit("Soldier", Enums.UnitClass.SOLDIER, Enums.UnitWeight.LIGHT, 3, 2, 2, elem, 2, 1, Enums.AOEType.SINGLE, Enums.AbilityType.NONE, "")
-
-func _make_unit(uname: String, cls: int, w: int, hp: int, atk: int, spd: int, elem: int, cost: int, range: int, aoe: int, abil_type: int, abil_id: String) -> UnitData:
-	var d := UnitData.new()
-	d.unit_name = uname
-	d.unit_class = cls
-	d.weight = w
-	d.base_hp = hp
-	d.base_attack = atk
-	d.base_speed = spd
-	d.element_affinity = elem
-	d.cost = cost
-	d.base_range = range
-	d.aoe_type = aoe
-	d.ability_type = abil_type
-	d.ability_id = abil_id
-	return d
+	return UnitFactory.make_unit_by_class(cls)
 
 func _build_ui():
-	var bg := ColorRect.new()
-	bg.color = Color(0.08, 0.08, 0.1, 0.95)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
-
-	var title := Label.new()
-	title.text = "Shop"
-	title.position = Vector2(340, 30)
-	title.size = Vector2(600, 40)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_color_override("font_color", Color(0.3, 1.0, 0.6))
-	title.add_theme_font_size_override("font_size", 32)
-	add_child(title)
-
-	_gold_label = Label.new()
-	_gold_label.position = Vector2(40, 30)
-	_gold_label.size = Vector2(200, 30)
-	_gold_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.3))
-	_gold_label.add_theme_font_size_override("font_size", 20)
-	add_child(_gold_label)
-
-	var roster_label := Label.new()
-	roster_label.text = "Roster: %d / 6" % [_roster.size()]
-	roster_label.position = Vector2(40, 60)
-	roster_label.size = Vector2(200, 20)
-	roster_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
-	roster_label.add_theme_font_size_override("font_size", 14)
-	add_child(roster_label)
-
-	_container = Node2D.new()
-	add_child(_container)
-
-	_refresh()
-
-	var leave_btn := _make_btn("Leave", Vector2(540, 580), Vector2(200, 50), Color(0.4, 0.3, 0.3))
+	_viewport_size = Vector2(get_viewport().size)
+	var vs := _viewport_size
+	add_child(ThemeHelper.make_bg())
+	add_child(ThemeHelper.make_title("Shop", vs, 14, 28))
+	_build_info_labels()
+	_build_scroll_area(vs)
+	var leave_btn := ThemeHelper.make_btn("Leave", Vector2((vs.x - 200) / 2, vs.y - 60), Vector2(200, 50), ThemeHelper.DANGER)
 	leave_btn.pressed.connect(_on_leave)
 	add_child(leave_btn)
+	_refresh()
+
+func _build_info_labels():
+	_gold_label = Label.new()
+	_gold_label.position = Vector2(24, 50)
+	_gold_label.size = Vector2(200, 26)
+	_gold_label.add_theme_color_override("font_color", ThemeHelper.GOLD)
+	_gold_label.add_theme_font_size_override("font_size", 18)
+	add_child(_gold_label)
+	_roster_count_label = Label.new()
+	_roster_count_label.position = Vector2(24, 74)
+	_roster_count_label.size = Vector2(200, 18)
+	_roster_count_label.add_theme_color_override("font_color", ThemeHelper.TEXT_DIM)
+	_roster_count_label.add_theme_font_size_override("font_size", 13)
+	add_child(_roster_count_label)
+
+func _build_scroll_area(vs: Vector2):
+	_scroll = ScrollContainer.new()
+	_scroll.position = Vector2(0, 100)
+	_scroll.size = Vector2(vs.x, vs.y - 100 - 70)
+	add_child(_scroll)
+	_body_container = VBoxContainer.new()
+	_body_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll.add_child(_body_container)
+	var stock_header := Label.new()
+	stock_header.text = "Available Units"
+	stock_header.size = Vector2(vs.x, 24)
+	stock_header.add_theme_color_override("font_color", ThemeHelper.INFO)
+	stock_header.add_theme_font_size_override("font_size", 18)
+	_body_container.add_child(stock_header)
+	_stock_container = HBoxContainer.new()
+	_stock_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_body_container.add_child(_stock_container)
+	var spacer := ColorRect.new()
+	spacer.color = Color.TRANSPARENT
+	spacer.size = Vector2(0, 16)
+	_body_container.add_child(spacer)
+	var sell_header := Label.new()
+	sell_header.text = "Sell Units"
+	sell_header.add_theme_color_override("font_color", ThemeHelper.GOLD)
+	sell_header.add_theme_font_size_override("font_size", 18)
+	_body_container.add_child(sell_header)
+	_roster_container = HBoxContainer.new()
+	_roster_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_roster_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_body_container.add_child(_roster_container)
 
 func _refresh():
-	for child in _container.get_children():
-		child.queue_free()
-
 	_gold_label.text = "Gold: %d" % [_gold]
+	_roster_count_label.text = "Roster: %d / %d" % [_roster.size(), MAX_ROSTER]
 
-	var vs := Vector2(get_viewport().size)
-	var total_w := _stock.size() * _card_w + (_stock.size() - 1) * 20
-	var start_x := (vs.x - total_w) / 2
-	var start_y := 140
+	for c in _stock_container.get_children():
+		c.queue_free()
+	for c in _roster_container.get_children():
+		c.queue_free()
 
+	var vs := _viewport_size
+
+	var stock_units := 0
 	for i in _stock.size():
 		var item: Dictionary = _stock[i]
-		var card := _make_card(item, start_x + i * (_card_w + 20), start_y)
-		_container.add_child(card)
+		var card := _make_stock_card(item)
+		_stock_container.add_child(card)
+		stock_units += 1
 
-func _make_card(item: Dictionary, x: float, y: float) -> Button:
+	if stock_units == 0:
+		var empty_lbl := Label.new()
+		empty_lbl.text = "  Nothing left to buy"
+		empty_lbl.size = Vector2(200, 30)
+		empty_lbl.add_theme_color_override("font_color", ThemeHelper.TEXT_DIM)
+		empty_lbl.add_theme_font_size_override("font_size", 13)
+		_stock_container.add_child(empty_lbl)
+
+	if _roster.size() == 0:
+		var empty_lbl := Label.new()
+		empty_lbl.text = "  No units to sell"
+		empty_lbl.size = Vector2(200, 30)
+		empty_lbl.add_theme_color_override("font_color", ThemeHelper.TEXT_DIM)
+		empty_lbl.add_theme_font_size_override("font_size", 13)
+		_roster_container.add_child(empty_lbl)
+	else:
+		for i in _roster.size():
+			var ud: UnitData = _roster[i]
+			var card := _make_roster_card(ud, i)
+			_roster_container.add_child(card)
+
+func _make_stock_card(item: Dictionary) -> Button:
 	var ud: UnitData = item.unit
 	var price: int = item.price
 	var can_afford := _gold >= price
-	var has_room := _roster.size() < 6
+	var has_room := _roster.size() < MAX_ROSTER
 
 	var b := Button.new()
-	b.position = Vector2(x, y)
 	b.size = Vector2(_card_w, _card_h)
 
-	var body_color := Color(0.2, 0.2, 0.25)
-	if has_room and can_afford:
-		body_color = Color(0.25, 0.35, 0.55)
+	if can_afford and has_room:
+		ThemeHelper.style_card(b, ud.weight)
+	else:
+		ThemeHelper.style_card(b, -1, true)
 
-	var sn := StyleBoxFlat.new()
-	sn.bg_color = body_color
-	sn.corner_radius_top_left = 6
-	sn.corner_radius_top_right = 6
-	sn.corner_radius_bottom_left = 6
-	sn.corner_radius_bottom_right = 6
-	sn.border_width_left = 1
-	sn.border_width_right = 1
-	sn.border_width_top = 1
-	sn.border_width_bottom = 1
-	sn.border_color = Color(0.4, 0.4, 0.5, 0.3)
-	b.add_theme_stylebox_override("normal", sn)
+	b.add_theme_color_override("font_color", ThemeHelper.TEXT)
 
-	var sh := StyleBoxFlat.new()
-	sh.bg_color = body_color.lightened(0.2)
-	sh.corner_radius_top_left = 6
-	sh.corner_radius_top_right = 6
-	sh.corner_radius_bottom_left = 6
-	sh.corner_radius_bottom_right = 6
-	b.add_theme_stylebox_override("hover", sh)
+	var portrait := UnitFactory.make_portrait(ud, 0, 0.5)
+	portrait.position = Vector2(4, 6)
+	b.add_child(portrait)
 
-	b.add_theme_color_override("font_color", Color.WHITE)
+	var px: int = 38
+	var pw: int = _card_w - px - 6
 
 	var name_lbl := Label.new()
-	name_lbl.text = ("★★★ " if ud.star_level == 3 else "★★ " if ud.star_level == 2 else "") + ud.unit_name
-	name_lbl.position = Vector2(6, 6)
-	name_lbl.size = Vector2(_card_w - 12, 20)
-	name_lbl.add_theme_color_override("font_color", Color.WHITE)
-	name_lbl.add_theme_font_size_override("font_size", 14)
+	name_lbl.text = UnitData.star_prefix(ud.star_level) + ud.unit_name
+	name_lbl.position = Vector2(px, 4)
+	name_lbl.size = Vector2(pw, 18)
+	name_lbl.add_theme_color_override("font_color", ThemeHelper.TEXT)
+	name_lbl.add_theme_font_size_override("font_size", 13)
 	b.add_child(name_lbl)
 
+	var cls_str := "Light" if ud.weight == Enums.UnitWeight.LIGHT else "Heavy"
 	var stats_lbl := Label.new()
-	stats_lbl.text = "HP:%d ATK:%d SPD:%d" % [ud.base_hp, ud.base_attack, ud.base_speed]
-	stats_lbl.position = Vector2(6, 28)
-	stats_lbl.size = Vector2(_card_w - 12, 16)
-	stats_lbl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8))
+	stats_lbl.text = "HP:%d ATK:%d SPD:%d" % [UnitData.total_hp(ud), UnitData.total_atk(ud), UnitData.total_spd(ud)]
+	stats_lbl.position = Vector2(px, 22)
+	stats_lbl.size = Vector2(pw, 14)
+	stats_lbl.add_theme_color_override("font_color", ThemeHelper.TEXT_DIM)
 	stats_lbl.add_theme_font_size_override("font_size", 10)
 	b.add_child(stats_lbl)
 
-	var cls_str := "Light" if ud.weight == Enums.UnitWeight.LIGHT else "Heavy"
 	var type_lbl := Label.new()
 	type_lbl.text = "[%s]" % [cls_str]
-	type_lbl.position = Vector2(6, 46)
-	type_lbl.size = Vector2(_card_w - 12, 16)
-	type_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6))
+	type_lbl.position = Vector2(px, 36)
+	type_lbl.size = Vector2(pw, 14)
+	type_lbl.add_theme_color_override("font_color", ThemeHelper.TEXT_DIM)
 	type_lbl.add_theme_font_size_override("font_size", 10)
 	b.add_child(type_lbl)
 
 	var elem_lbl := Label.new()
 	elem_lbl.text = Enums.element_name(ud.element_affinity)
-	elem_lbl.position = Vector2(6, 64)
-	elem_lbl.size = Vector2(_card_w - 12, 14)
+	elem_lbl.position = Vector2(px, 50)
+	elem_lbl.size = Vector2(pw, 14)
 	elem_lbl.add_theme_color_override("font_color", Enums.element_color(ud.element_affinity))
 	elem_lbl.add_theme_font_size_override("font_size", 9)
 	b.add_child(elem_lbl)
 
 	var extra_lbl := Label.new()
-	extra_lbl.text = "RNG:%d Cost:%d" % [ud.base_range, ud.cost]
-	extra_lbl.position = Vector2(6, 80)
-	extra_lbl.size = Vector2(_card_w - 12, 14)
-	extra_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.8))
+	extra_lbl.text = "RNG:%d Cost:%d" % [UnitData.total_rng(ud), ud.cost]
+	extra_lbl.position = Vector2(px, 64)
+	extra_lbl.size = Vector2(pw, 14)
+	extra_lbl.add_theme_color_override("font_color", ThemeHelper.TEXT_DIM)
 	extra_lbl.add_theme_font_size_override("font_size", 9)
 	b.add_child(extra_lbl)
 
+	if ud.items.size() > 0:
+		var icons := PackedStringArray()
+		for it in ud.items:
+			icons.append(it.icon_char)
+		var ilbl := Label.new()
+		ilbl.text = "[" + ", ".join(icons) + "]"
+		ilbl.position = Vector2(px, 76)
+		ilbl.size = Vector2(pw, 12)
+		ilbl.add_theme_color_override("font_color", ThemeHelper.INFO)
+		ilbl.add_theme_font_size_override("font_size", 8)
+		b.add_child(ilbl)
+
 	var price_lbl := Label.new()
 	price_lbl.text = "%d Gold" % [price]
-	price_lbl.position = Vector2(6, 94)
-	price_lbl.size = Vector2(_card_w - 12, 20)
-	price_lbl.add_theme_color_override("font_color", Color(1.0, 0.8, 0.3))
+	var price_y := 80
+	if ud.items.size() > 0:
+		price_y = 88
+	price_lbl.position = Vector2(px, price_y)
+	price_lbl.size = Vector2(pw, 20)
+	price_lbl.add_theme_color_override("font_color", ThemeHelper.GOLD)
 	price_lbl.add_theme_font_size_override("font_size", 14)
 	b.add_child(price_lbl)
 
 	if not has_room:
 		var full_lbl := Label.new()
 		full_lbl.text = "ROSTER FULL"
-		full_lbl.position = Vector2(6, 102)
-		full_lbl.size = Vector2(_card_w - 12, 16)
-		full_lbl.add_theme_color_override("font_color", Color(0.8, 0.3, 0.3))
+		full_lbl.position = Vector2(px, 94)
+		full_lbl.size = Vector2(pw, 14)
+		full_lbl.add_theme_color_override("font_color", ThemeHelper.DANGER)
 		full_lbl.add_theme_font_size_override("font_size", 10)
 		b.add_child(full_lbl)
 
@@ -249,13 +244,82 @@ func _make_card(item: Dictionary, x: float, y: float) -> Button:
 
 	return b
 
+func _make_roster_card(ud: UnitData, idx: int) -> Button:
+	var sell_price := maxi(SELL_AMOUNT, ud.cost)
+
+	var b := Button.new()
+	b.size = Vector2(_roster_card_w, _roster_card_h)
+	ThemeHelper.style_card(b, ud.weight)
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+
+	var portrait := UnitFactory.make_portrait(ud, 0, 0.5)
+	portrait.position = Vector2(4, 4)
+	b.add_child(portrait)
+
+	var px: int = 38
+	var pw: int = _roster_card_w - px - 6
+
+	var name_lbl := Label.new()
+	name_lbl.text = UnitData.star_prefix(ud.star_level) + ud.unit_name
+	name_lbl.position = Vector2(px, 2)
+	name_lbl.size = Vector2(pw, 16)
+	name_lbl.add_theme_color_override("font_color", ThemeHelper.TEXT)
+	name_lbl.add_theme_font_size_override("font_size", 11)
+	b.add_child(name_lbl)
+
+	var stats_lbl := Label.new()
+	stats_lbl.text = "HP:%d ATK:%d" % [UnitData.total_hp(ud), UnitData.total_atk(ud)]
+	stats_lbl.position = Vector2(px, 18)
+	stats_lbl.size = Vector2(pw, 14)
+	stats_lbl.add_theme_color_override("font_color", ThemeHelper.TEXT_DIM)
+	stats_lbl.add_theme_font_size_override("font_size", 9)
+	b.add_child(stats_lbl)
+
+	var elem_lbl := Label.new()
+	elem_lbl.text = Enums.element_name(ud.element_affinity)
+	elem_lbl.position = Vector2(px, 32)
+	elem_lbl.size = Vector2(pw, 14)
+	elem_lbl.add_theme_color_override("font_color", Enums.element_color(ud.element_affinity))
+	elem_lbl.add_theme_font_size_override("font_size", 9)
+	b.add_child(elem_lbl)
+
+	var sell_lbl := Label.new()
+	sell_lbl.text = "Sell: +%dg" % [sell_price]
+	sell_lbl.position = Vector2(px, 52)
+	sell_lbl.size = Vector2(pw, 20)
+	sell_lbl.add_theme_color_override("font_color", ThemeHelper.GOLD)
+	sell_lbl.add_theme_font_size_override("font_size", 12)
+	b.add_child(sell_lbl)
+
+	if ud.items.size() > 0:
+		var icons := PackedStringArray()
+		for it in ud.items:
+			icons.append(it.icon_char)
+		var ilbl := Label.new()
+		ilbl.text = "[" + ", ".join(icons) + "]"
+		ilbl.position = Vector2(px, 66)
+		ilbl.size = Vector2(pw, 12)
+		ilbl.add_theme_color_override("font_color", ThemeHelper.INFO)
+		ilbl.add_theme_font_size_override("font_size", 8)
+		b.add_child(ilbl)
+
+	b.pressed.connect(_sell.bind(idx))
+	return b
+
+func _sell(idx: int):
+	var ud: UnitData = _roster[idx]
+	var sell_price := maxi(SELL_AMOUNT, ud.cost)
+	_gold += sell_price
+	_roster.remove_at(idx)
+	_refresh()
+
 func _buy(item: Dictionary):
 	var ud: UnitData = item.unit
 	var price: int = item.price
 
 	if _gold < price:
 		return
-	if _roster.size() >= 6:
+	if _roster.size() >= MAX_ROSTER:
 		return
 
 	_gold -= price
@@ -266,25 +330,3 @@ func _buy(item: Dictionary):
 func _on_leave():
 	closed.emit(_gold, _roster)
 	queue_free()
-
-func _make_btn(text: String, pos: Vector2, size: Vector2, color: Color = Color(0.2, 0.5, 0.3)) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.position = pos
-	b.size = size
-	b.add_theme_color_override("font_color", Color.WHITE)
-	var sn := StyleBoxFlat.new()
-	sn.bg_color = color
-	sn.corner_radius_top_left = 4
-	sn.corner_radius_top_right = 4
-	sn.corner_radius_bottom_left = 4
-	sn.corner_radius_bottom_right = 4
-	b.add_theme_stylebox_override("normal", sn)
-	var sh := StyleBoxFlat.new()
-	sh.bg_color = color.lightened(0.15)
-	sh.corner_radius_top_left = 4
-	sh.corner_radius_top_right = 4
-	sh.corner_radius_bottom_left = 4
-	sh.corner_radius_bottom_right = 4
-	b.add_theme_stylebox_override("hover", sh)
-	return b

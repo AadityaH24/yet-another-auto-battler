@@ -1,11 +1,9 @@
 extends CanvasLayer
 
-signal node_selected(node)
+signal node_selected(node: MapNodeData)
 
-const MapNodeData = preload("res://scripts/map/map_node_data.gd")
-
-var _nodes: Array = []
-var _current_node
+var _nodes: Array[MapNodeData] = []
+var _current_node: MapNodeData
 var _act: int
 var _node_btns: Dictionary = {}
 
@@ -22,22 +20,19 @@ func _init():
 func _ready():
 	_build_background()
 
-func show_map(act: int, nodes: Array, current):
+func show_map(act: int, nodes: Array[MapNodeData], current: MapNodeData):
 	_act = act
 	_nodes = nodes
 	_current_node = current
 	_build_map()
 
 func _build_background():
-	var bg := ColorRect.new()
-	bg.color = Color(0.08, 0.08, 0.1, 0.95)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
+	add_child(ThemeHelper.make_bg())
 
 	_act_label = Label.new()
 	_act_label.position = Vector2(20, 20)
 	_act_label.size = Vector2(200, 30)
-	_act_label.add_theme_color_override("font_color", Color.WHITE)
+	_act_label.add_theme_color_override("font_color", ThemeHelper.GOLD)
 	_act_label.add_theme_font_size_override("font_size", 24)
 	add_child(_act_label)
 
@@ -90,7 +85,7 @@ func _build_map():
 			if not _node_btns.has(conn):
 				continue
 			var to_pos: Vector2 = _node_btns[conn].position + Vector2(NODE_W / 2, 0)
-			var line := _make_line(from_pos, to_pos, Color(0.3, 0.3, 0.35, 0.5))
+			var line := _make_line(from_pos, to_pos, ThemeHelper.BORDER)
 			_line_nodes.add_child(line)
 
 func _make_node_button(n, pos: Vector2) -> Button:
@@ -105,69 +100,74 @@ func _make_node_button(n, pos: Vector2) -> Button:
 
 	var sn := StyleBoxFlat.new()
 	sn.bg_color = norm_c
-	sn.corner_radius_top_left = 6
-	sn.corner_radius_top_right = 6
-	sn.corner_radius_bottom_left = 6
-	sn.corner_radius_bottom_right = 6
-	sn.border_width_left = 1
-	sn.border_width_right = 1
+	sn.border_color = ThemeHelper.GOLD
 	sn.border_width_top = 1
+	sn.border_width_left = 1
 	sn.border_width_bottom = 1
-	sn.border_color = Color(0.5, 0.5, 0.6, 0.3)
+	sn.border_width_right = 1
+	sn.corner_radius_top_left = 4
+	sn.corner_radius_top_right = 4
+	sn.corner_radius_bottom_left = 4
+	sn.corner_radius_bottom_right = 4
 	b.add_theme_stylebox_override("normal", sn)
 
 	var sh := StyleBoxFlat.new()
 	sh.bg_color = hover_c
-	sh.corner_radius_top_left = 6
-	sh.corner_radius_top_right = 6
-	sh.corner_radius_bottom_left = 6
-	sh.corner_radius_bottom_right = 6
-	sh.border_width_left = 2
-	sh.border_width_right = 2
+	sh.border_color = ThemeHelper.GOLD_BRIGHT
 	sh.border_width_top = 2
+	sh.border_width_left = 2
 	sh.border_width_bottom = 2
-	sh.border_color = Color(0.8, 0.8, 1.0, 0.5)
+	sh.border_width_right = 2
+	sh.corner_radius_top_left = 4
+	sh.corner_radius_top_right = 4
+	sh.corner_radius_bottom_left = 4
+	sh.corner_radius_bottom_right = 4
 	b.add_theme_stylebox_override("hover", sh)
 
 	var sd := StyleBoxFlat.new()
-	sd.bg_color = Color(0.15, 0.15, 0.18)
-	sd.corner_radius_top_left = 6
-	sd.corner_radius_top_right = 6
-	sd.corner_radius_bottom_left = 6
-	sd.corner_radius_bottom_right = 6
+	sd.bg_color = ThemeHelper.BG_DARK
+	sd.border_color = ThemeHelper.BORDER
+	sd.border_width_top = 1
+	sd.border_width_left = 1
+	sd.border_width_bottom = 1
+	sd.border_width_right = 1
+	sd.corner_radius_top_left = 4
+	sd.corner_radius_top_right = 4
+	sd.corner_radius_bottom_left = 4
+	sd.corner_radius_bottom_right = 4
 	b.add_theme_stylebox_override("disabled", sd)
 
-	b.add_theme_color_override("font_color", Color.WHITE)
+	b.add_theme_color_override("font_color", ThemeHelper.TEXT)
 	b.add_theme_font_size_override("font_size", 12)
 
-	var is_connected := false
+	var is_node_connected := false
 	if _current_node == null:
-		is_connected = n.layer == 0
+		is_node_connected = n.layer == 0
 	else:
-		is_connected = _current_node.connections.has(n)
+		is_node_connected = _current_node.connections.has(n)
 
-	is_connected = is_connected and not n.completed
+	is_node_connected = is_node_connected and not n.completed
 
 	var is_current = n == _current_node
 
 	if is_current:
 		var sc := StyleBoxFlat.new()
-		sc.bg_color = Color(0.3, 0.6, 0.3)
-		sc.corner_radius_top_left = 6
-		sc.corner_radius_top_right = 6
-		sc.corner_radius_bottom_left = 6
-		sc.corner_radius_bottom_right = 6
-		sc.border_width_left = 2
-		sc.border_width_right = 2
+		sc.bg_color = ThemeHelper.SUCCESS
+		sc.border_color = Color("#a0e8a0")
 		sc.border_width_top = 2
+		sc.border_width_left = 2
 		sc.border_width_bottom = 2
-		sc.border_color = Color(0.6, 1.0, 0.6)
+		sc.border_width_right = 2
+		sc.corner_radius_top_left = 4
+		sc.corner_radius_top_right = 4
+		sc.corner_radius_bottom_left = 4
+		sc.corner_radius_bottom_right = 4
 		b.add_theme_stylebox_override("normal", sc)
 
 	elif n.completed:
 		b.disabled = true
 
-	elif not is_connected:
+	elif not is_node_connected:
 		b.disabled = true
 
 	else:
@@ -185,23 +185,23 @@ func _make_line(from: Vector2, to: Vector2, color: Color) -> Node2D:
 	n.add_child(line)
 	return n
 
-func _on_node_pressed(n):
+func _on_node_pressed(n: MapNodeData):
 	n.completed = true
 	_current_node = n
 	node_selected.emit(n)
 
-func _node_colors(type: int) -> Array:
+func _node_colors(type: int) -> Array[Color]:
 	match type:
 		MapNodeData.Type.BATTLE:
-			return [Color(0.25, 0.3, 0.45), Color(0.35, 0.4, 0.55)]
+			return [Color("#1a1a30"), Color("#2a2a50")]
 		MapNodeData.Type.ELITE:
-			return [Color(0.45, 0.25, 0.3), Color(0.55, 0.35, 0.4)]
+			return [Color("#301a1a"), Color("#502a2a")]
 		MapNodeData.Type.BOSS:
-			return [Color(0.5, 0.15, 0.15), Color(0.6, 0.25, 0.25)]
+			return [Color("#3a0a0a"), Color("#5a1a1a")]
 		MapNodeData.Type.SHOP:
-			return [Color(0.3, 0.4, 0.25), Color(0.4, 0.55, 0.35)]
+			return [Color("#1a2a18"), Color("#2a4028")]
 		MapNodeData.Type.TREASURE:
-			return [Color(0.4, 0.35, 0.2), Color(0.55, 0.5, 0.3)]
+			return [Color("#2a2410"), Color("#403820")]
 		MapNodeData.Type.REST:
-			return [Color(0.25, 0.35, 0.4), Color(0.35, 0.45, 0.55)]
-	return [Color(0.2, 0.2, 0.2), Color(0.3, 0.3, 0.3)]
+			return [Color("#1a2228"), Color("#2a3840")]
+	return [Color("#141414"), Color("#242424")]

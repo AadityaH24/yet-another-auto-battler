@@ -5,31 +5,45 @@ var team: int
 var grid_pos: Vector2i
 var current_hp: int
 var current_speed: int
+var current_attack: int
+var current_range: int
 var has_acted: bool = false
 var armor: int = 0
 var status_effects: Dictionary = {}
 var is_rooted: bool = false
 
 var _max_hp: int
-var _flash_timer: float = 0.0
-var _is_flashing: bool = false
 var _original_speed: int = 0
+var _sprite: Sprite2D
+var _death_tween: Tween
 
 const TILE_SIZE: int = 80
 const SIZE: float = 60.0
 
 func _ready():
-	current_hp = unit_data.base_hp
+	if not unit_data:
+		return
 	_max_hp = unit_data.base_hp
+	current_attack = unit_data.base_attack
 	current_speed = unit_data.base_speed
-	_original_speed = unit_data.base_speed
-
-func _process(delta: float):
-	if _is_flashing:
-		_flash_timer -= delta
-		if _flash_timer <= 0.0:
-			_is_flashing = false
-			queue_redraw()
+	current_range = unit_data.base_range
+	for item in unit_data.items:
+		_max_hp += item.hp_bonus
+		current_attack += item.atk_bonus
+		current_speed += item.spd_bonus
+		current_range += item.range_bonus
+	current_hp = _max_hp
+	_original_speed = current_speed
+	_sprite = Sprite2D.new()
+	_sprite.texture = SpriteGenerator.generate(unit_data.unit_class, team, unit_data.element_affinity, unit_data.star_level)
+	_sprite.scale = Vector2(SpriteGenerator.SCALE, SpriteGenerator.SCALE)
+	add_child(_sprite)
+	var icon_s := Sprite2D.new()
+	icon_s.texture = SpriteGenerator.make_class_icon(unit_data.unit_class)
+	var isc := SpriteGenerator.SCALE * 0.35
+	icon_s.scale = Vector2(isc, isc)
+	icon_s.position = Vector2(-SpriteGenerator.SIZE / 2.0, SpriteGenerator.SIZE / 2.0 - SpriteGenerator.ICON_SZ * isc)
+	_sprite.add_child(icon_s)
 
 func is_alive() -> bool:
 	return current_hp > 0
@@ -38,8 +52,7 @@ func take_damage(amount: int):
 	current_hp -= amount
 	if current_hp < 0:
 		current_hp = 0
-	_is_flashing = true
-	_flash_timer = 0.15
+	_hit_flash()
 	queue_redraw()
 
 func apply_status(effect: String, turns: int):
@@ -48,9 +61,11 @@ func apply_status(effect: String, turns: int):
 		current_speed = maxi(1, _original_speed - 1)
 	if effect == "root":
 		is_rooted = true
+	queue_redraw()
 
 func tick_statuses():
 	var had_burn := status_effects.has("burn")
+	var had_poison := status_effects.has("poison")
 	for effect in status_effects.keys():
 		var t: int = status_effects[effect] - 1
 		if t <= 0:
@@ -63,9 +78,39 @@ func tick_statuses():
 			status_effects[effect] = t
 	if had_burn and is_alive():
 		current_hp = maxi(0, current_hp - 1)
-		_is_flashing = true
-		_flash_timer = 0.1
-		queue_redraw()
+		_hit_flash()
+	if had_poison and is_alive():
+		current_hp = maxi(0, current_hp - 1)
+		_hit_flash()
+	queue_redraw()
+
+func animate_move(to_world: Vector2) -> Tween:
+	var t: Tween = create_tween().set_trans(Tween.TRANS_SINE)
+	t.tween_property(self, "position", to_world, 0.25)
+	return t
+
+func animate_attack(target_world: Vector2) -> Tween:
+	var origin := position
+	var lunge := origin + (target_world - origin).normalized() * 20.0
+	var t: Tween = create_tween().set_trans(Tween.TRANS_QUINT)
+	t.tween_property(self, "position", lunge, 0.1)
+	t.tween_property(self, "position", origin, 0.12)
+	return t
+
+func animate_death() -> Tween:
+	if _death_tween and _death_tween.is_valid():
+		return _death_tween
+	_death_tween = create_tween().set_trans(Tween.TRANS_QUINT)
+	_death_tween.tween_property(_sprite, "modulate:a", 0.0, 0.35)
+	_death_tween.parallel().tween_property(_sprite, "scale", Vector2.ZERO, 0.35)
+	return _death_tween
+
+func _hit_flash():
+	if not _sprite:
+		return
+	var t := create_tween()
+	t.tween_property(_sprite, "modulate", Color(3, 1.5, 1.5, 1), 0.06)
+	t.tween_property(_sprite, "modulate", Color.WHITE, 0.1)
 
 func update_visual():
 	queue_redraw()
@@ -73,98 +118,38 @@ func update_visual():
 func _draw():
 	if not unit_data:
 		return
-
-	var alive := is_alive()
-	var alpha := 1.0 if alive else 0.35
+	if not is_alive():
+		return
 	var half := SIZE / 2.0
-	var pos := Vector2(-half, -half)
-	var rect := Rect2(pos, Vector2(SIZE, SIZE))
-
-	var team_color := Color(0.25, 0.5, 0.9) if team == 0 else Color(0.9, 0.25, 0.25)
-
-	if _is_flashing:
-		team_color = Color.WHITE
-
-	team_color.a = alpha
-
-	draw_rect(rect, team_color, true)
-
-	var weight_color := Color(0.8, 0.8, 0.9, alpha)
-	match unit_data.weight:
-		Enums.UnitWeight.LIGHT:
-			weight_color = Color(0.4, 0.7, 1.0, alpha)
-		Enums.UnitWeight.HEAVY:
-			weight_color = Color(1.0, 0.4, 0.3, alpha)
-
-	var bw := 2
-	var border_rect := Rect2(pos + Vector2(bw, bw), Vector2(SIZE - bw * 2, SIZE - bw * 2))
-	draw_rect(border_rect, weight_color, false, 2.0)
-
-	if unit_data.element_affinity != Enums.ElementType.NONE:
-		var elem_color: Color = Enums.element_color(unit_data.element_affinity)
-		elem_color.a = alpha * 0.7
-		var inner := Rect2(pos + Vector2(4, 4), Vector2(SIZE - 8, SIZE - 8))
-		draw_rect(inner, elem_color, false, 1.5)
-
-	var symbol := _get_class_symbol()
+	var bar_w: float = SIZE - 4
+	var bar_h: float = 5
+	var bar_y: float = -half - 20
+	var bar_x: float = -half + 2
+	var hp_ratio := float(current_hp) / float(_max_hp)
+	var bg_rect := Rect2(Vector2(bar_x, bar_y), Vector2(bar_w, bar_h))
+	draw_rect(bg_rect, ThemeHelper.BG_DARK, true)
+	var hp_color := Color("#4a8a40")
+	if hp_ratio < 0.5:
+		hp_color = Color("#c8a840")
+	if hp_ratio < 0.25:
+		hp_color = Color("#8a3030")
+	var hp_w := bar_w * hp_ratio
+	if hp_w > 0:
+		draw_rect(Rect2(Vector2(bar_x, bar_y), Vector2(hp_w, bar_h)), hp_color, true)
+	var hp_text := "%d/%d" % [current_hp, _max_hp]
 	var font := ThemeDB.fallback_font
-	var font_size := 24
-	var f_color := Color(1, 1, 1, alpha)
+	var hp_font_size := 8
 	if font:
-		var text_size := font.get_string_size(symbol, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
-		var text_pos := Vector2(-text_size.x / 2.0, text_size.y / 4.0)
-		draw_string(font, text_pos, symbol, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, f_color)
-
-	if alive:
-		var bar_w: float = SIZE - 4
-		var bar_h: float = 5
-		var bar_y: float = -half - 8
-		var bar_x: float = -half + 2
-		var hp_ratio := float(current_hp) / float(_max_hp)
-
-		var bg_rect := Rect2(Vector2(bar_x, bar_y), Vector2(bar_w, bar_h))
-		draw_rect(bg_rect, Color(0.1, 0.1, 0.1, 0.8), true)
-
-		var hp_color := Color(0.2, 0.9, 0.2)
-		if hp_ratio < 0.5:
-			hp_color = Color(0.9, 0.7, 0.1)
-		if hp_ratio < 0.25:
-			hp_color = Color(0.9, 0.2, 0.1)
-
-		var hp_w := bar_w * hp_ratio
-		if hp_w > 0:
-			var hp_rect := Rect2(Vector2(bar_x, bar_y), Vector2(hp_w, bar_h))
-			draw_rect(hp_rect, hp_color, true)
-
-		var hp_text := "%d/%d" % [current_hp, _max_hp]
-		var hp_font_size := 8
-		if font:
-			var hp_text_size := font.get_string_size(hp_text, HORIZONTAL_ALIGNMENT_CENTER, -1, hp_font_size)
-			var hp_text_pos := Vector2(-hp_text_size.x / 2.0, bar_y + bar_h + hp_font_size + 2)
-			draw_string(font, hp_text_pos, hp_text, HORIZONTAL_ALIGNMENT_CENTER, -1, hp_font_size, Color(1, 1, 1, alpha))
-
-		var status_y := bar_y - 10
-		var status_x := -half + 2
-		for effect in status_effects.keys():
-			var dot_color := Color.WHITE
-			match effect:
-				"burn": dot_color = Color(1.0, 0.3, 0.0)
-				"chill": dot_color = Color(0.3, 0.6, 1.0)
-				"root": dot_color = Color(0.5, 0.3, 0.1)
-			draw_rect(Rect2(Vector2(status_x, status_y), Vector2(4, 4)), dot_color, true)
-			status_x += 6
-
-func _get_class_symbol() -> String:
-	match unit_data.unit_class:
-		Enums.UnitClass.SOLDIER: return "S"
-		Enums.UnitClass.MAGE: return "M"
-		Enums.UnitClass.SCOUT: return "Sc"
-		Enums.UnitClass.KNIGHT: return "K"
-		Enums.UnitClass.ELEMENTALIST: return "E"
-		Enums.UnitClass.BERSERKER: return "B"
-		Enums.UnitClass.SHIELDBEARER: return "Sh"
-		Enums.UnitClass.LANCER: return "L"
-		Enums.UnitClass.ARCHER: return "A"
-		Enums.UnitClass.WARLOCK: return "W"
-		Enums.UnitClass.CLERIC: return "C"
-	return "?"
+		var hp_text_size := font.get_string_size(hp_text, HORIZONTAL_ALIGNMENT_CENTER, -1, hp_font_size)
+		draw_string(font, Vector2(-hp_text_size.x / 2.0, bar_y + bar_h + hp_font_size + 2), hp_text, HORIZONTAL_ALIGNMENT_CENTER, -1, hp_font_size, Color(1, 1, 1, 0.9))
+	var status_y := bar_y - 10
+	var status_x := -half + 2
+	for effect in status_effects.keys():
+		var dot_color := Color.WHITE
+		match effect:
+			"burn": dot_color = Color(1.0, 0.3, 0.0)
+			"chill": dot_color = Color(0.3, 0.6, 1.0)
+			"root": dot_color = Color(0.5, 0.3, 0.1)
+			"poison": dot_color = Color(0.4, 0.8, 0.2)
+		draw_rect(Rect2(Vector2(status_x, status_y), Vector2(4, 4)), dot_color, true)
+		status_x += 6
